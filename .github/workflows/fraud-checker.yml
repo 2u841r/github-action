@@ -1,22 +1,43 @@
-name: Fraud Checker
+name: Fraud Check API
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+  repository_dispatch:
+    types: [fraud-check]
 
 jobs:
-  check-fraud:
+  check:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Call Fraud Checker API
+      - name: Check fraud for phone number
         run: |
-          echo "Calling Fraud Checker API..."
+          PHONE="${{ github.event.client_payload.phone }}"
+          echo "Checking phone: $PHONE"
+
           RESPONSE=$(curl -s \
             -H "Referer: https://fraudchecker.link/" \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" \
-            "https://fraudchecker.link/free-fraud-checker-bd/api/search.php?phone=01832776884")
-          echo "Result:"
-          echo "$RESPONSE"
+            "https://fraudchecker.link/free-fraud-checker-bd/api/search.php?phone=$PHONE")
+
+          echo "Result: $RESPONSE"
+          echo "RESULT=$RESPONSE" >> $GITHUB_ENV
+
+      - name: Save result to Gist
+        run: |
+          PHONE="${{ github.event.client_payload.phone }}"
+          RESULT_JSON=$(echo "$RESULT" | jq -Rs '.')
+
+          # Create/update a gist with the result
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GIST_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"description\": \"Fraud check result for $PHONE\",
+              \"public\": false,
+              \"files\": {
+                \"result_${PHONE}.json\": {
+                  \"content\": $RESULT_JSON
+                }
+              }
+            }" \
+            https://api.github.com/gists
