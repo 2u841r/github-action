@@ -1,0 +1,19 @@
+name: Fraud Checker
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-fraud:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Fraud Checker API
+        run: |
+          echo "Calling Fraud Checker API..."
+          RESPONSE=$(curl -s "https://fraudchecker.link/free-fraud-checker-bd/api/search.php?phone=01832776884")
+          echo "Result:"
+          echo "$RESPONSE"
