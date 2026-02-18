@@ -2,105 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Fraud Checker API</title>
+  <title>Fraud Checker</title>
   <style>
     body { font-family: monospace; background: #111; color: #0f0; padding: 2rem; }
     input, button { font-family: monospace; padding: 0.5rem 1rem; font-size: 1rem; }
-    #result { margin-top: 1.5rem; white-space: pre-wrap; background: #1a1a1a; padding: 1rem; border-radius: 6px; }
+    #result { margin-top: 1.5rem; white-space: pre-wrap; background: #1a1a1a; padding: 1rem; border-radius: 6px; min-height: 60px; }
   </style>
 </head>
 <body>
   <h2>📱 Fraud Checker</h2>
-
   <input type="text" id="phone" placeholder="01XXXXXXXXX" />
   <button onclick="checkFraud()">Check</button>
-
   <div id="result">Result will appear here...</div>
 
   <script>
-    // ⚠️ Replace these with your own values
-    const GITHUB_TOKEN = "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"; // Fine-grained PAT: actions:write + gists:write
-    const REPO_OWNER   = "2u841r";
-    const REPO_NAME    = "github-action";
-
     async function checkFraud() {
       const phone = document.getElementById("phone").value.trim();
       const resultDiv = document.getElementById("result");
 
-      if (!phone) {
-        resultDiv.textContent = "Please enter a phone number.";
-        return;
+      if (!phone) { resultDiv.textContent = "Please enter a phone number."; return; }
+
+      resultDiv.textContent = "⏳ Checking... (may take 20-30 seconds)";
+
+      try {
+        const res = await fetch(`/api/check?phone=${encodeURIComponent(phone)}`);
+        const data = await res.json();
+        resultDiv.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultDiv.textContent = "❌ Error: " + err.message;
       }
-
-      resultDiv.textContent = "⏳ Triggering check...";
-
-      // Step 1: Trigger GitHub Action via repository_dispatch
-      const triggerRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
-        method: "POST",
-        headers: {
-          "Authorization": `token ${GITHUB_TOKEN}`,
-          "Accept": "application/vnd.github+json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          event_type: "fraud-check",
-          client_payload: { phone }
-        })
-      });
-
-      if (!triggerRes.ok) {
-        resultDiv.textContent = "❌ Failed to trigger action: " + triggerRes.status;
-        return;
-      }
-
-      resultDiv.textContent = "✅ Action triggered! Waiting for result";
-
-      // Step 2: Poll GitHub Gist API for result (retry up to 20 times, every 3s)
-      let attempts = 0;
-      const interval = setInterval(async () => {
-        attempts++;
-        resultDiv.textContent += ".";
-
-        const gistsRes = await fetch("https://api.github.com/gists", {
-          headers: {
-            "Authorization": `token ${GITHUB_TOKEN}`,
-            "Accept": "application/vnd.github+json"
-          }
-        });
-
-        const gists = await gistsRes.json();
-        const match = gists.find(g =>
-          g.description === `Fraud check result for ${phone}`
-        );
-
-        if (match) {
-          clearInterval(interval);
-          // Fetch full gist content
-          const gistDetail = await fetch(match.url, {
-            headers: { "Authorization": `token ${GITHUB_TOKEN}` }
-          });
-          const gistData = await gistDetail.json();
-          const fileKey = Object.keys(gistData.files)[0];
-          const content = gistData.files[fileKey].content;
-
-          try {
-            resultDiv.textContent = JSON.stringify(JSON.parse(content), null, 2);
-          } catch {
-            resultDiv.textContent = content;
-          }
-
-          // Cleanup: delete the gist after reading
-          await fetch(match.url, {
-            method: "DELETE",
-            headers: { "Authorization": `token ${GITHUB_TOKEN}` }
-          });
-        }
-
-        if (attempts >= 20) {
-          clearInterval(interval);
-          resultDiv.textContent += "\n\n⏰ Timeout: No result received.";
-        }
-      }, 3000);
     }
   </script>
 </body>
